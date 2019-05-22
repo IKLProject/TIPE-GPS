@@ -11,7 +11,6 @@ fh=open(r'C:\Users\SOS\Downloads\marathondeparis.gpx')
 gpx_file = gpxpy.parse(fh)
 segment = gpx_file.tracks[0].segments[0]
 
-
 #Transformation du fichier en une table de coordonnées GPS
 
 coords = pd.DataFrame([
@@ -21,19 +20,16 @@ coords = pd.DataFrame([
          'time': p.time} for p in segment.points])
 coords.set_index('time', drop=True, inplace=True)
 
-
 #Stockage des coordonnées GPS dans des listes
 
 L_lat=coords['lat'].values
 L_lon=coords['lon'].values
 L_alti=coords['ele'].values
 
-
 #Ajout de coordonnées NaNs pour les pertes de signal et les instants sans mesures
 
 coords.index = np.round(coords.index.astype(np.int64), -9).astype('datetime64[ns]')
 coords = coords.resample('1S').asfreq()
-
 
 #Stockage des coordonnées GPS étendues dans des listes
     
@@ -41,14 +37,11 @@ L_lat_nan=coords['lat'].values
 L_lon_nan=coords['lon'].values
 L_alti_nan=coords['ele'].values
 
-
 #Constantes pour les conversions entre coordonnées WGS 84 et coordonnées cartésiennes
 
 a=6378137.
 e=0.081819190842622
 pi=3.14159265358979323846264338328
-
-
 
 #Conversion WGS 84 (ellipsoïdal) -> Cartésien
   
@@ -57,7 +50,7 @@ def etc(lat,lon,alti):
     global a,e,pi
 
     if np.isnan(lat):
-        return nan, nan, nan
+        return np.nan, np.nan, np.nan
     lat,lon=lat*pi/180.,lon*pi/180.
     N=a/m.sqrt(1-e**2*m.sin(lat)**2)
     x=(N+alti)*m.cos(lat)*m.cos(lon)
@@ -75,7 +68,6 @@ def conv_etc(t):
         L.append([x,y,z])
     return L
 
-
 #Conversion cartésien -> WGS 84 (ellipsoïdal)        
 
 def iter_lat_alti(N,lat,alti,p,z):
@@ -92,7 +84,7 @@ def cte(x,y,z):
     global e,pi
     
     if np.isnan(x):
-        return nan,nan,nan
+        return np.nan,np.nan,np.nan
     p=m.sqrt(x**2+y**2)
     lon=m.atan2(y,x)
     lat=m.atan2(z,p*(1-e**2))
@@ -111,7 +103,6 @@ def conv_cte(t):
         L.append([lat,lon,alti])
     return L
 
-
 #Produit vectoriel et norme de vecteurs en 3D
     
 def prod_vect(x0,y0,z0,x1,y1,z1):
@@ -122,7 +113,6 @@ def norme(x,y,z):
     
     return m.sqrt(x**2+y**2+z**2)
 
-
 #Distance d'un point (x,y,z) à une droite de vecteur directeur (a,b,c) passant par le point (x0,y0,z0) 
     
 def dist_3D(x,y,z,x0,y0,z0,a,b,c):
@@ -130,8 +120,7 @@ def dist_3D(x,y,z,x0,y0,z0,a,b,c):
     t=prod_vect(x-x0,y-y0,z-z0,a,b,c)
     return norme(t[0],t[1],t[2])/norme(a,b,c)
 
-
-#Concaténation de deux tableaux
+#Concaténation de deux tableaux avec suppression du dernier élement du premier tableau
     
 def concat(t1,t2):
     
@@ -139,7 +128,6 @@ def concat(t1,t2):
         del t1[-1]
         return t1+t2
     return t1+t2
-
 
 #Algorithme de Ramer-Douglas-Peucker en 3D avec epsilon la marge de tolérance de distance
   
@@ -159,7 +147,6 @@ def rdp_3D(t,epsilon):
         return [t[0],t[n-1]]
     else:
         return concat(rdp_3D(t[0:(maxind+1)],epsilon),rdp_3D(t[maxind:],epsilon))
-
 
 #Ajout positions manquantes par régression linéaire
 
@@ -186,7 +173,6 @@ def fill_pos(t):
             i+=j
     return L
 
-
 #Calcul vitesses et accélérations
 
 def fill_spd_accel(t):
@@ -197,7 +183,6 @@ def fill_spd_accel(t):
         L.append(t[i]-t[i-1])
     L.append(0.)
     return L
-
 
 #Booléen de présence d'une valeur NaN dans une matrice
     
@@ -211,8 +196,7 @@ def test_nan(t):
                 return True
     return False
 
-    
-#Conversion ellipsoïdal -> matrices de positions + vitesses + accélérations cartésiennes
+#Conversion liste de coordonnées WGS 84 -> positions + vitesses + accélérations cartésiennes
     
 def convert_table(lat,lon,ele):
     n=len(lat)
@@ -231,16 +215,13 @@ def convert_table(lat,lon,ele):
         L_U.append(np.matrix([[Ax[i]],[Ay[i]],[Az[i]]]))
     return L_X,L_U
           
-
-#Liste des vecteurs d'état et des vecteurs de contrôle
+#Listes des vecteurs d'état et des vecteurs de contrôle
 
 L_X,L_U=convert_table(L_lat_nan,L_lon_nan,L_alti_nan)
-
 
 #Intervalle entre deux mesures
 
 dt=1
-
 
 #Vecteur d'état et matrice de covariance initiales
 
@@ -259,7 +240,6 @@ F=np.matrix([[1., 0., 0., dt, 0., 0.],
              [0., 0., 0., 1., 0., 0.],
              [0., 0., 0., 0., 1., 0.],
              [0., 0., 0., 0., 0., 1.]])
- 
 
 #Matrice associée au vecteur de contrôle
 
@@ -267,30 +247,25 @@ B = np.matrix([[0.5*dt**2,0.,0.],[0.,0.5*dt**2,0.],
                [0.,0.,0.5*dt**2],[dt,0.,0.],
                [0.,dt,0.],[0.,0.,dt]])
 
-
 #Matrice d'observation
     
 H=np.matrix([[1., 0., 0., 0., 0., 0.],
              [0., 1., 0., 0., 0., 0.],
              [0., 0., 1., 0., 0., 0.]])
-
-     
+ 
 #Matrice de covariance du bruit d'observation
     
 R = np.matrix([[10., 0., 0.],
                [0., 10., 0.],
                [0., 0., 10.]])
 
-    
 #Matrice de covariance du bruit de processus
 
 Q=np.zeros((6,6))
 
-
 #Matrice identité
 
 I = np.eye(6)
-
 
 #Prédiction de l'état k+1 à partir de l'état k
 
@@ -303,7 +278,6 @@ def kf_predict(X,P,F,Q,B,U):
     P=F*P*F.T+Q
     return X,P
     
-
 #Mise à jour de la prédiction avec la mesure de l'état k+1
     
 def kf_update(X,P,Z,H,R):
@@ -319,8 +293,7 @@ def kf_update(X,P,Z,H,R):
     P=(I-K*H)*P
     return X,P
 
-
-#Première implémentation filtre de Kalman
+#Implémentation filtre de Kalman
     
 def filtre_Kalman(L_X,L_U):
     
@@ -340,7 +313,6 @@ def filtre_Kalman(L_X,L_U):
         Kalman_P.append(Pk)
     return Kalman_X
 
-
 #Transformation des résultats en coordonnées WGS 84
 
 def convktx(t):
@@ -358,15 +330,13 @@ tab_kalman_cart=convktx(filtre_Kalman(tab1,tab2))
 
 tab_kalman_GPS=conv_cte(tab_kalman_cart)
 
-Kalman_lat=[]
-Kalman_lon=[]
+Kalman_lat,Kalman_lon=[],[]
 
 for i in tab_kalman_GPS:
     Kalman_lat.append(i[0])
     Kalman_lon.append(i[1])
 
-
-#Projection des résultats sur OpenStreetMap
+#Projection des résultats dans OpenStreetMap
     
 fig=plt.figure()
 plt.plot(Kalman_lon,Kalman_lat)
